@@ -17,7 +17,7 @@
 from __future__ import annotations
 from functools import cached_property
 from itertools import repeat
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from ifs_physics_common.framework.components import ImplicitTendencyComponent
@@ -28,25 +28,40 @@ if TYPE_CHECKING:
     from datetime import timedelta
     from typing import Dict, Optional, Union
 
-    from gt4py.cartesian import StencilObject
-
     from ifs_physics_common.framework.config import GT4PyConfig
     from ifs_physics_common.framework.grid import ComputationalGrid
     from ifs_physics_common.utils.typingx import (
         NDArrayLikeDict,
         ParameterDict,
         PropertyDict,
+        NDArrayLike,
     )
 
+from ._stencils import cloudsc2_next
+
+import gt4py.next as gtx
+from gt4py.next import common
+
+I2 = gtx.Dimension("I")
+J2 = gtx.Dimension("J")
+K2 = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
+
 g_aph_s = None
-g_rfl = None
-g_sfl = None
-g_covptot = None
 g_trpaus = None
 
 
-class Cloudsc2NL(ImplicitTendencyComponent):
-    cloudsc2: StencilObject
+def as_field(*dims: gtx.Dimension):
+    def impl(arr: NDArrayLike) -> gtx.Field:
+        domain = common.Domain(
+            dims=dims, ranges=[common.unit_range(s) for s in arr.shape]
+        )
+        return common._field(arr, domain=domain)
+
+    return impl
+
+
+class Cloudsc2NLnext(ImplicitTendencyComponent):
+    cloudsc2: Any
 
     def __init__(
         self,
@@ -85,7 +100,11 @@ class Cloudsc2NL(ImplicitTendencyComponent):
                 "ZSCAL": 0.9,
             }
         )
-        self.cloudsc2 = self.compile_stencil("cloudsc2_nl", externals)
+
+        # from gt4py.eve.utils import FrozenNamespace
+
+        # cloudsc2_next.constants = FrozenNamespace(**externals)
+        self.cloudsc2 = cloudsc2_next.cloudsc2_next
 
     @cached_property
     def _input_properties(self) -> PropertyDict:
@@ -139,52 +158,46 @@ class Cloudsc2NL(ImplicitTendencyComponent):
     ) -> None:
         with managed_temporary_storage(
             self.computational_grid,
-            *repeat(((I, J), "float"), 5),
+            *repeat(((I, J, K), "float"), 2),
             gt4py_config=self.gt4py_config,
-        ) as (aph_s, rfl, sfl, covptot, trpaus):
+        ) as (aph_s,trpaus):
             aph_s[...] = state["f_aph"][..., -1]
             self.cloudsc2(
-                in_ap=state["f_ap"],
-                in_aph=state["f_aph"],
-                in_eta=state["f_eta"],
-                in_lu=state["f_lu"],
-                in_lude=state["f_lude"],
-                in_mfd=state["f_mfd"],
-                in_mfu=state["f_mfu"],
-                in_q=state["f_q"],
-                in_qi=state["f_qi"],
-                in_ql=state["f_ql"],
-                in_qsat=state["f_qsat"],
-                in_supsat=state["f_supsat"],
-                in_t=state["f_t"],
-                in_tnd_cml_q=state["f_tnd_cml_q"],
-                in_tnd_cml_qi=state["f_tnd_cml_qi"],
-                in_tnd_cml_ql=state["f_tnd_cml_ql"],
-                in_tnd_cml_t=state["f_tnd_cml_t"],
-                out_clc=out_diagnostics["f_clc"],
-                out_covptot=out_diagnostics["f_covptot"],
-                out_fhpsl=out_diagnostics["f_fhpsl"],
-                out_fhpsn=out_diagnostics["f_fhpsn"],
-                out_fplsl=out_diagnostics["f_fplsl"],
-                out_fplsn=out_diagnostics["f_fplsn"],
-                out_tnd_q=out_tendencies["f_q"],
-                out_tnd_qi=out_tendencies["f_qi"],
-                out_tnd_ql=out_tendencies["f_ql"],
-                out_tnd_t=out_tendencies["f_t"],
-                tmp_aph_s=aph_s,
-                tmp_covptot=covptot,
-                tmp_rfl=rfl,
-                tmp_sfl=sfl,
-                tmp_trpaus=trpaus,
+                in_ap=as_field(I2, J2, K2)(state["f_ap"]),
+                in_aph=as_field(I2, J2, K2)(state["f_aph"]),
+                in_eta=as_field(K2)(state["f_eta"]),
+                in_lu=as_field(I2, J2, K2)(state["f_lu"]),
+                in_lude=as_field(I2, J2, K2)(state["f_lude"]),
+                in_mfd=as_field(I2, J2, K2)(state["f_mfd"]),
+                in_mfu=as_field(I2, J2, K2)(state["f_mfu"]),
+                in_q=as_field(I2, J2, K2)(state["f_q"]),
+                in_qi=as_field(I2, J2, K2)(state["f_qi"]),
+                in_ql=as_field(I2, J2, K2)(state["f_ql"]),
+                in_qsat=as_field(I2, J2, K2)(state["f_qsat"]),
+                in_supsat=as_field(I2, J2, K2)(state["f_supsat"]),
+                in_t=as_field(I2, J2, K2)(state["f_t"]),
+                in_tnd_cml_q=as_field(I2, J2, K2)(state["f_tnd_cml_q"]),
+                in_tnd_cml_qi=as_field(I2, J2, K2)(state["f_tnd_cml_qi"]),
+                in_tnd_cml_ql=as_field(I2, J2, K2)(state["f_tnd_cml_ql"]),
+                in_tnd_cml_t=as_field(I2, J2, K2)(state["f_tnd_cml_t"]),
+                out_clc=as_field(I2, J2, K2)(out_diagnostics["f_clc"]),
+                out_covptot=as_field(I2, J2, K2)(out_diagnostics["f_covptot"]),
+                out_fhpsl=as_field(I2, J2, K2)(out_diagnostics["f_fhpsl"]),
+                out_fhpsn=as_field(I2, J2, K2)(out_diagnostics["f_fhpsn"]),
+                out_fplsl=as_field(I2, J2, K2)(out_diagnostics["f_fplsl"]),
+                out_fplsn=as_field(I2, J2, K2)(out_diagnostics["f_fplsn"]),
+                out_tnd_q=as_field(I2, J2, K2)(out_tendencies["f_q"]),
+                out_tnd_qi=as_field(I2, J2, K2)(out_tendencies["f_qi"]),
+                out_tnd_ql=as_field(I2, J2, K2)(out_tendencies["f_ql"]),
+                out_tnd_t=as_field(I2, J2, K2)(out_tendencies["f_t"]),
+                tmp_aph_s=as_field(I2, J2, K2)(aph_s),
+                # tmp_covptot=as_field(I2, J2, K2)(covptot),
+                # tmp_rfl=as_field(I2, J2, K2)(rfl),
+                # tmp_sfl=as_field(I2, J2, K2)(sfl),
+                tmp_trpaus=as_field(I2, J2, K2)(trpaus),
                 dt=self.gt4py_config.dtypes.float(timestep.total_seconds()),
-                origin=(0, 0, 0),
-                domain=self.computational_grid.grids[I, J, K - 1 / 2].shape,
-                validate_args=self.gt4py_config.validate_args,
-                exec_info=self.gt4py_config.exec_info,
+                offset_provider={"K": K2},
             )
-            global g_aph_s, g_covptot, g_rfl, g_sfl, g_trpaus
+            global g_aph_s, g_trpaus
             g_aph_s = np.copy(aph_s)
-            g_covptot = np.copy(covptot)
-            g_rfl = np.copy(rfl)
-            g_sfl = np.copy(sfl)
             g_trpaus = np.copy(trpaus)
