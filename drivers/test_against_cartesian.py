@@ -123,5 +123,7 @@ def setup():
     np.testing.assert_allclose(tendencies["f_ql"], tendencies_next["f_ql"])
     np.testing.assert_allclose(tendencies["f_t"], tendencies_next["f_t"])
 
+    print("PASSED!")
+
 
 setup()

@@ -377,9 +377,7 @@ def main_scan(
     lfdcp: gtx.float64,
     meltp2: gtx.float64,
     qlwc: gtx.float64,
-    ckcodtl: gtx.float64,
     qiwc: gtx.float64,
-    ckcodti: gtx.float64,
     in_qsat: gtx.float64,
     qlim: gtx.float64,
     in_ap: gtx.float64,
@@ -398,6 +396,9 @@ def main_scan(
     ql: gtx.float64,
     qi: gtx.float64,
     q: gtx.float64,
+    dr: gtx.float64,
+    rfreeze: gtx.float64,
+    fwatr: gtx.float64,
 ):
     rfl_km1, sfl_km1, covptot_km1, _, _, _, _, _, _, _ = carry
 
@@ -417,46 +418,6 @@ def main_scan(
         rfln = rfl_km1
         sfln = sfl_km1
 
-    # diagnostic calculation of rain production from cloud liquid water
-    if out_clc > constants.ZEPS2:
-        if constants.LEVAPLS2 | constants.LDRAIN1D:
-            lcrit = 1.9 * constants.RCLCRIT
-        else:
-            lcrit = 2.0 * constants.RCLCRIT
-        cldl = qlwc / out_clc
-        dl = ckcodtl * (1.0 - exp(-((cldl / lcrit) ** 2.0)))
-        prr = qlwc - out_clc * cldl * exp(-dl)
-        qlwc = qlwc - prr
-    else:
-        prr = 0.0
-
-    # diagnostic calculation of snow production from cloud ice
-    if out_clc > constants.ZEPS2:
-        if constants.LEVAPLS2 | constants.LDRAIN1D:
-            icrit = 0.0001
-        else:
-            icrit = 2.0 * constants.RCLCRIT
-        cldi = qiwc / out_clc
-        di = (
-            ckcodti
-            * exp(0.025 * (t - constants.RTT))
-            * (1.0 - exp(-((cldi / icrit) ** 2.0)))
-        )
-        prs = qiwc - out_clc * cldi * exp(-di)
-        qiwc = qiwc - prs
-    else:
-        prs = 0.0
-
-    # new precipitation (rain + snow)
-    dr = cons2 * dp * (prr + prs)
-
-    # rain fraction (different from cloud liquid water fraction!)
-    if t < constants.RTT:
-        rfreeze = cons2 * dp * prr
-        fwatr = 0.0
-    else:
-        rfreeze = 0.0
-        fwatr = 1.0
     rfln = rfln + fwatr * dr
     sfln = sfln + (1.0 - fwatr) * dr
 
@@ -573,6 +534,40 @@ def main_scan(
 
 
 @gtx.field_operator
+def _diag_calc_snow_from_cloud_ice(
+    out_clc: IJKField, qiwc: IJKField, t: IJKField, ckcodti: gtx.float64
+) -> IJKField:
+    # diagnostic calculation of snow production from cloud ice
+    icrit = (
+        0.0001 if constants.LEVAPLS2 | constants.LDRAIN1D else 2.0 * constants.RCLCRIT
+    )
+    cldi = qiwc / out_clc
+    di = (
+        ckcodti
+        * exp(0.025 * (t - constants.RTT))
+        * (1.0 - exp(-((cldi / icrit) ** 2.0)))
+    )
+    prs = qiwc - out_clc * cldi * exp(-di)
+    return where(out_clc > constants.ZEPS2, prs, 0.0)
+
+
+@gtx.field_operator
+def _diag_calc_rain_from_liquid_water(
+    out_clc: IJKField, qlwc: IJKField, ckcodtl: gtx.float64
+) -> IJKField:
+    # diagnostic calculation of rain production from cloud liquid water
+    lcrit = (
+        1.9 * constants.RCLCRIT
+        if constants.LEVAPLS2 | constants.LDRAIN1D
+        else 2.0 * constants.RCLCRIT
+    )
+    cldl = qlwc / out_clc
+    dl = ckcodtl * (1.0 - exp(-((cldl / lcrit) ** 2.0)))
+    prr = qlwc - out_clc * cldl * exp(-dl)
+    return where(out_clc > constants.ZEPS2, prr, 0.0)
+
+
+@gtx.field_operator
 def _cloudsc2_next(
     in_ap: IJKField,
     in_aph: IJKField,
@@ -608,7 +603,6 @@ def _cloudsc2_next(
     t = _compute_t(in_t, in_tnd_cml_t, dt)
     trpaus = _compute_trpaus(t, in_eta)
 
-    # ============ out_clc
     # first guess values for q, ql and qi
     q = in_q + dt * in_tnd_cml_q + in_supsat
     ql = in_ql + dt * in_tnd_cml_ql
@@ -694,6 +688,19 @@ def _cloudsc2_next(
     condl = (qlwc - ql) / dt
     condi = (qiwc - qi) / dt
 
+    prs = _diag_calc_snow_from_cloud_ice(out_clc, qiwc, t, ckcodti)
+    qiwc = qiwc - prs
+
+    prr = _diag_calc_rain_from_liquid_water(out_clc, qlwc, ckcodtl)
+    qlwc = qlwc - prr
+
+    # new precipitation (rain + snow)
+    dr = cons2 * dp * (prr + prs)
+
+    # rain fraction (different from cloud liquid water fraction!)
+    rfreeze = where(t < constants.RTT, cons2 * dp * prr, 0.0)
+    fwatr = where(t < constants.RTT, 0.0, 1.0)
+
     (
         _,
         _,
@@ -713,9 +720,7 @@ def _cloudsc2_next(
         lfdcp,
         meltp2,
         qlwc,
-        ckcodtl,
         qiwc,
-        ckcodti,
         in_qsat,
         qlim,
         in_ap,
@@ -734,6 +739,9 @@ def _cloudsc2_next(
         ql,
         qi,
         q,
+        dr,
+        rfreeze,
+        fwatr,
     )
 
     out_fhpsl = -out_fplsl * constants.RLVTT
