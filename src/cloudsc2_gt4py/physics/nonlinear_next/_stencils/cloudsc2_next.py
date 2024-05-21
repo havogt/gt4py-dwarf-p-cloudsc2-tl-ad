@@ -300,7 +300,7 @@ def _compute_qc_clc(
 ) -> tuple[IJKField, IJKField]:
     qt = q + ql + qi
 
-    return where(
+    out_clc, qc = where(
         qt < qcrit,
         (0.0, 0.0),
         where(
@@ -309,6 +309,8 @@ def _compute_qc_clc(
             _compute_qc_clc_else(qsat, qt, qcrit, scalm),
         ),
     )
+
+    return out_clc, qc
 
 
 @gtx.field_operator
@@ -397,24 +399,23 @@ def main_scan(
     qi: gtx.float64,
     q: gtx.float64,
 ):
-    tmp_rfl, tmp_sfl, tmp_covptot, _, _, _, _, _, _, _ = carry
-    tmp_rfl_old, tmp_sfl_old = tmp_rfl, tmp_sfl
+    rfl_km1, sfl_km1, covptot_km1, _, _, _, _, _, _, _ = carry
 
     # calculate precipitation overlap
     # simple form based on Maximum Overlap
-    tmp_covptot = maximum(tmp_covptot, out_clc)
-    covpclr = maximum(tmp_covptot - out_clc, 0.0)
+    covptot_km1 = maximum(covptot_km1, out_clc)
+    covpclr = maximum(covptot_km1 - out_clc, 0.0)
 
     # melting of incoming snow
-    if tmp_sfl != 0.0:
+    if sfl_km1 != 0.0:
         cons = cons2 * dp / lfdcp
-        snmlt = minimum(tmp_sfl, cons * maximum(t - meltp2, 0.0))
-        rfln = tmp_rfl + snmlt
-        sfln = tmp_sfl - snmlt
+        snmlt = minimum(sfl_km1, cons * maximum(t - meltp2, 0.0))
+        rfln = rfl_km1 + snmlt
+        sfln = sfl_km1 - snmlt
         t = t - snmlt / cons
     else:
-        rfln = tmp_rfl
-        sfln = tmp_sfl
+        rfln = rfl_km1
+        sfln = sfl_km1
 
     # diagnostic calculation of rain production from cloud liquid water
     if out_clc > constants.ZEPS2:
@@ -466,7 +467,7 @@ def main_scan(
         & (covpclr > constants.ZEPS2)
         & (constants.LEVAPLS2 | constants.LDRAIN1D)
     ):
-        preclr = prtot * covpclr / tmp_covptot
+        preclr = prtot * covpclr / covptot_km1
 
         # this is the humidity in the moisest zcovpclr region
         qe = in_qsat - (in_qsat - qlim) * covpclr / ((1.0 - out_clc) ** 2.0)
@@ -483,8 +484,8 @@ def main_scan(
         dpr = minimum(covpclr * b / dtgdp, preclr)
         preclr = preclr - dpr
         if preclr <= 0.0:
-            tmp_covptot = out_clc
-        out_covptot = tmp_covptot
+            covptot_km1 = out_clc
+        out_covptot = covptot_km1
 
         # warm proportion
         evapr = dpr * rfln / prtot
@@ -557,25 +558,17 @@ def main_scan(
     out_tnd_ql = (qlwc - ql) / dt
     out_tnd_qi = (qiwc - qi) / dt
 
-    # # these fluxes will later be shifted one level downward
-    # fplsl = rfln
-    # fplsn = sfln
-
-    # record rain flux for next level
-    tmp_rfl = rfln
-    tmp_sfl = sfln
-
     return (
-        tmp_rfl,
-        tmp_sfl,
-        tmp_covptot,
+        rfln,
+        sfln,
+        covptot_km1,
         out_tnd_q,
         out_tnd_qi,
         out_tnd_ql,
         out_tnd_t,
         out_covptot,
-        tmp_rfl_old,
-        tmp_sfl_old,
+        rfl_km1,
+        sfl_km1,
     )
 
 
@@ -684,8 +677,6 @@ def _cloudsc2_next(
         lo1, out_clc + (1.0 - out_clc) * (1.0 - exp(-lude / in_lu(Koff[1]))), out_clc
     )
     qc = where(lo1, qc + lude, qc)
-
-    # ============
 
     # add compensating subsidence component
     rho = in_ap / (constants.RD * t)
