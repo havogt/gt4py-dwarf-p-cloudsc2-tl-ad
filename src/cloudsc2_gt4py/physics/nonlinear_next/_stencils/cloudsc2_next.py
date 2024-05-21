@@ -354,13 +354,9 @@ def f_cuadjtqs_nl(ap: gtx.float64, t: gtx.float64, q: gtx.float64):
     return t, q
 
 
-@gtx.scan_operator(
-    axis=K, forward=True, init=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-)
+@gtx.scan_operator(axis=K, forward=True, init=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
 def main_scan(
     carry: tuple[
-        gtx.float64,
-        gtx.float64,
         gtx.float64,
         gtx.float64,
         gtx.float64,
@@ -400,7 +396,7 @@ def main_scan(
     rfreeze: gtx.float64,
     fwatr: gtx.float64,
 ):
-    rfl_km1, sfl_km1, covptot_km1, _, _, _, _, _, _, _ = carry
+    rfl_km1, sfl_km1, covptot_km1, _, _, _, _, _ = carry
 
     # calculate precipitation overlap
     # simple form based on Maximum Overlap
@@ -516,16 +512,12 @@ def main_scan(
         )
         * gdp
     )
-    out_tnd_ql = (qlwc - ql) / dt
-    out_tnd_qi = (qiwc - qi) / dt
 
     return (
         rfln,
         sfln,
         covptot_km1,
         out_tnd_q,
-        out_tnd_qi,
-        out_tnd_ql,
         out_tnd_t,
         out_covptot,
         rfl_km1,
@@ -706,8 +698,6 @@ def _cloudsc2_next(
         _,
         _,
         out_tnd_q,
-        out_tnd_qi,
-        out_tnd_ql,
         out_tnd_t,
         out_covptot,
         out_fplsl,
@@ -746,6 +736,9 @@ def _cloudsc2_next(
 
     out_fhpsl = -out_fplsl * constants.RLVTT
     out_fhpsn = -out_fplsn * constants.RLSTT
+
+    out_tnd_ql = (qlwc - ql) / dt
+    out_tnd_qi = (qiwc - qi) / dt
 
     return (
         out_clc,
