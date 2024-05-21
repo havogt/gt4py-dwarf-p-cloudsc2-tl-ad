@@ -310,20 +310,30 @@ def _compute_qc_clc(
         ),
     )
 
+
 @gtx.field_operator
-def f_cuadjtqs_nl_0(ap:gtx.float64, t:gtx.float64, q:gtx.float64, z3es:gtx.float64, z4es:gtx.float64, z5alcp:gtx.float64, zaldcp:gtx.float64):
+def f_cuadjtqs_nl_0(
+    ap: gtx.float64,
+    t: gtx.float64,
+    q: gtx.float64,
+    z3es: gtx.float64,
+    z4es: gtx.float64,
+    z5alcp: gtx.float64,
+    zaldcp: gtx.float64,
+):
     foeew = constants.R2ES * exp(z3es * (t - constants.RTT) / (t - z4es))
     qsat = minimum(foeew / ap, constants.ZQMAX)
     cor = 1.0 / (1.0 - constants.RETV * qsat)
-    qsat = qsat*cor
+    qsat = qsat * cor
     z2s = z5alcp / (t - z4es) ** 2.0
     cond = (q - qsat) / (1.0 + qsat * cor * z2s)
-    t = t+zaldcp * cond
-    q = q-cond
+    t = t + zaldcp * cond
+    q = q - cond
     return t, q
 
+
 @gtx.field_operator
-def f_cuadjtqs_nl(ap:gtx.float64, t:gtx.float64, q:gtx.float64):
+def f_cuadjtqs_nl(ap: gtx.float64, t: gtx.float64, q: gtx.float64):
     if t > constants.RTT:
         z3es = constants.R3LES
         z4es = constants.R4LES
@@ -338,13 +348,26 @@ def f_cuadjtqs_nl(ap:gtx.float64, t:gtx.float64, q:gtx.float64):
     # if constants.ICALL == 0:
     t, q = f_cuadjtqs_nl_0(ap, t, q, z3es, z4es, z5alcp, zaldcp)
     t, q = f_cuadjtqs_nl_0(ap, t, q, z3es, z4es, z5alcp, zaldcp)
-    
+
     return t, q
 
 
-@gtx.scan_operator(axis=K, forward=True, init=(0.0, 0.0, 0.0,0.0,0.0, 0.0,0.0,0.0,0.0,0.0))
+@gtx.scan_operator(
+    axis=K, forward=True, init=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+)
 def main_scan(
-    carry: tuple[gtx.float64, gtx.float64,gtx.float64, gtx.float64, gtx.float64,gtx.float64, gtx.float64, gtx.float64, gtx.float64, gtx.float64],
+    carry: tuple[
+        gtx.float64,
+        gtx.float64,
+        gtx.float64,
+        gtx.float64,
+        gtx.float64,
+        gtx.float64,
+        gtx.float64,
+        gtx.float64,
+        gtx.float64,
+        gtx.float64,
+    ],
     out_clc: gtx.float64,
     t: gtx.float64,
     cons2: gtx.float64,
@@ -367,15 +390,14 @@ def main_scan(
     condi: gtx.float64,
     lvdcp: gtx.float64,
     lsdcp: gtx.float64,
-    in_lude:gtx.float64,
-    fwat:gtx.float64,
-    gdp:gtx.float64,
-    ql:gtx.float64,
-    qi:gtx.float64,
-    q:gtx.float64,
-    out_covptot:gtx.float64,
+    in_lude: gtx.float64,
+    fwat: gtx.float64,
+    gdp: gtx.float64,
+    ql: gtx.float64,
+    qi: gtx.float64,
+    q: gtx.float64,
 ):
-    tmp_rfl, tmp_sfl, tmp_covptot, _,_,_, _,_,_,_ = carry
+    tmp_rfl, tmp_sfl, tmp_covptot, _, _, _, _, _, _, _ = carry
     tmp_rfl_old, tmp_sfl_old = tmp_rfl, tmp_sfl
 
     # calculate precipitation overlap
@@ -459,21 +481,22 @@ def main_scan(
 
         dtgdp = dt * constants.RG / (in_aph_p1 - in_aph)
         dpr = minimum(covpclr * b / dtgdp, preclr)
-        preclr = preclr -dpr
+        preclr = preclr - dpr
         if preclr <= 0.0:
             tmp_covptot = out_clc
         out_covptot = tmp_covptot
 
         # warm proportion
         evapr = dpr * rfln / prtot
-        rfln =rfln- evapr
+        rfln = rfln - evapr
 
         # ice proportion
         evaps = dpr * sfln / prtot
-        sfln =sfln- evaps
+        sfln = sfln - evaps
     else:
         evapr = 0.0
         evaps = 0.0
+        out_covptot = 0.0
 
     # update of T and Q tendencies due to:
     # - condensation/evaporation of cloud water/ice
@@ -494,8 +517,8 @@ def main_scan(
     )
 
     # first guess T and Q
-    t =t+ dt * dtdt
-    q = q+dt * dqdt
+    t = t + dt * dtdt
+    q = q + dt * dqdt
     qold = q
 
     # clipping of final qv
@@ -512,11 +535,11 @@ def main_scan(
         fwatr = 1.0
     rn = fwatr * dr2
     sn = (1.0 - fwatr) * dr2
-    condl = condl+fwatr * dq / dt
-    condi =condi+ (1.0 - fwatr) * dq / dt
-    rfln =rfln+ rn
-    sfln =sfln+ sn
-    rfreeze = rfreeze+rfreeze2
+    condl = condl + fwatr * dq / dt
+    condi = condi + (1.0 - fwatr) * dq / dt
+    rfln = rfln + rn
+    sfln = sfln + sn
+    rfreeze = rfreeze + rfreeze2
 
     # calculate output tendencies
     out_tnd_q = -(condl + condi) + (in_lude + evapr + evaps) * gdp
@@ -534,15 +557,26 @@ def main_scan(
     out_tnd_ql = (qlwc - ql) / dt
     out_tnd_qi = (qiwc - qi) / dt
 
-    # these fluxes will later be shifted one level downward
-    fplsl = rfln
-    fplsn = sfln
+    # # these fluxes will later be shifted one level downward
+    # fplsl = rfln
+    # fplsn = sfln
 
     # record rain flux for next level
     tmp_rfl = rfln
     tmp_sfl = sfln
 
-    return tmp_rfl, tmp_sfl, tmp_covptot,out_tnd_q ,out_tnd_qi, out_tnd_ql, out_tnd_t, out_covptot, tmp_rfl_old, tmp_sfl_old
+    return (
+        tmp_rfl,
+        tmp_sfl,
+        tmp_covptot,
+        out_tnd_q,
+        out_tnd_qi,
+        out_tnd_ql,
+        out_tnd_t,
+        out_covptot,
+        tmp_rfl_old,
+        tmp_sfl_old,
+    )
 
 
 @gtx.field_operator
@@ -566,7 +600,19 @@ def _cloudsc2_next(
     in_tnd_cml_t: IJKField,
     tmp_aph_s: IJKField,
     dt: gtx.float64,
-) -> tuple[IJKField, IJKField,IJKField,IJKField, IJKField,IJKField, IJKField, IJKField, IJKField, IJKField, IJKField]:
+) -> tuple[
+    IJKField,
+    IJKField,
+    IJKField,
+    IJKField,
+    IJKField,
+    IJKField,
+    IJKField,
+    IJKField,
+    IJKField,
+    IJKField,
+    IJKField,
+]:
     t = _compute_t(in_t, in_tnd_cml_t, dt)
     tmp_trpaus = _compute_trpaus(t, in_eta)
 
@@ -658,8 +704,18 @@ def _cloudsc2_next(
     condl = (qlwc - ql) / dt
     condi = (qiwc - qi) / dt
 
-
-    tmp_rfl, tmp_sfl, tmp_covptot, out_tnd_q, out_tnd_qi, out_tnd_ql, out_tnd_t, out_covptot, out_fplsl, out_fplsn = main_scan(
+    (
+        _,
+        _,
+        _,
+        out_tnd_q,
+        out_tnd_qi,
+        out_tnd_ql,
+        out_tnd_t,
+        out_covptot,
+        out_fplsl,
+        out_fplsn,
+    ) = main_scan(
         out_clc,
         t,
         cons2,
@@ -688,15 +744,27 @@ def _cloudsc2_next(
         ql,
         qi,
         q,
-        out_covptot,)
-    
-    out_fhpsl = - out_fplsl *constants.RLVTT
-    out_fhpsn = - out_fplsn *constants.RLSTT
+    )
 
-    return tmp_trpaus, out_clc, out_covptot, out_fhpsl, out_fhpsn, out_fplsl, out_fplsn, out_tnd_q, out_tnd_qi, out_tnd_ql, out_tnd_t
+    out_fhpsl = -out_fplsl * constants.RLVTT
+    out_fhpsn = -out_fplsn * constants.RLSTT
+
+    return (
+        tmp_trpaus,
+        out_clc,
+        out_covptot,
+        out_fhpsl,
+        out_fhpsn,
+        out_fplsl,
+        out_fplsn,
+        out_tnd_q,
+        out_tnd_qi,
+        out_tnd_ql,
+        out_tnd_t,
+    )
 
 
-@gtx.program
+@gtx.program  # (backend=gtx.itir_python)
 def cloudsc2_next(
     in_ap: IJKField,
     in_aph: IJKField,
@@ -749,5 +817,17 @@ def cloudsc2_next(
         in_tnd_cml_t,
         tmp_aph_s,
         dt,
-        out=(tmp_trpaus[:, :, :-1], out_clc[:, :, :-1], out_covptot[:,:,:-1],out_fhpsl[:,:,:-1], out_fhpsn[:,:,:-1], out_fplsl[:,:,:-1], out_fplsn[:,:,:-1], out_tnd_q[:,:,:-1], out_tnd_qi[:,:,:-1],out_tnd_ql[:,:,:-1],out_tnd_t[:,:,:-1]),
+        out=(
+            tmp_trpaus[:, :, :-1],
+            out_clc[:, :, :-1],
+            out_covptot[:, :, :-1],
+            out_fhpsl[:, :, :-1],
+            out_fhpsn[:, :, :-1],
+            out_fplsl[:, :, :-1],
+            out_fplsn[:, :, :-1],
+            out_tnd_q[:, :, :-1],
+            out_tnd_qi[:, :, :-1],
+            out_tnd_ql[:, :, :-1],
+            out_tnd_t[:, :, :-1],
+        ),
     )
