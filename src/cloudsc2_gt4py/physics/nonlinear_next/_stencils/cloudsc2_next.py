@@ -354,6 +354,58 @@ def f_cuadjtqs_nl(ap: gtx.float64, t: gtx.float64, q: gtx.float64):
     return t, q
 
 
+@gtx.field_operator
+def _preciptation_evaporation(
+    rfln: gtx.float64,
+    sfln: gtx.float64,
+    covpclr: gtx.float64,
+    covptot_km1: gtx.float64,
+    in_qsat: gtx.float64,
+    qlim: gtx.float64,
+    out_clc: gtx.float64,
+    in_ap: gtx.float64,
+    tmp_aph_s: gtx.float64,
+    dt: gtx.float64,
+    corqs: gtx.float64,
+    in_aph_p1: gtx.float64,
+    in_aph: gtx.float64,
+):
+    prtot = rfln + sfln
+    preclr = prtot * covpclr / covptot_km1
+
+    # this is the humidity in the moisest zcovpclr region
+    qe = in_qsat - (in_qsat - qlim) * covpclr / ((1.0 - out_clc) ** 2.0)
+    beta = (
+        constants.RG
+        * constants.RPECONS
+        * (sqrt(in_ap / tmp_aph_s) / 0.00509 * preclr / covpclr) ** 0.5777
+    )
+
+    # implicit solution
+    b = dt * beta * (in_qsat - qe) / (1.0 + dt * beta * corqs)
+
+    dtgdp = dt * constants.RG / (in_aph_p1 - in_aph)
+    dpr = minimum(covpclr * b / dtgdp, preclr)
+    preclr = preclr - dpr
+    if preclr <= 0.0:
+        covptot_km1 = out_clc
+    out_covptot = covptot_km1
+    # warm proportion
+    evapr = dpr * rfln / prtot
+
+    # ice proportion
+    evaps = dpr * sfln / prtot
+
+    # TODO: foast type deduction fails here
+    return where(
+        (prtot > constants.ZEPS2)
+        & (covpclr > constants.ZEPS2)
+        & (constants.LEVAPLS2 | constants.LDRAIN1D),
+        (evapr, evaps, out_covptot),
+        (0.0, 0.0, 0.0),
+    )
+
+
 @gtx.scan_operator(axis=K, forward=True, init=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
 def main_scan(
     carry: tuple[
@@ -400,57 +452,39 @@ def main_scan(
     covpclr = maximum(covptot_km1 - out_clc, 0.0)
 
     # melting of incoming snow
-    if sfl_km1 != 0.0:
-        cons = cons2 * dp / lfdcp
-        snmlt = minimum(sfl_km1, cons * maximum(t - meltp2, 0.0))
-        rfln = rfl_km1 + snmlt
-        sfln = sfl_km1 - snmlt
-        t = t - snmlt / cons
-    else:
-        rfln = rfl_km1
-        sfln = sfl_km1
+    cons = cons2 * dp / lfdcp
+    snmlt = where(
+        sfl_km1 != 0.0, minimum(sfl_km1, cons * maximum(t - meltp2, 0.0)), 0.0
+    )
+
+    rfln = rfl_km1 + snmlt
+    sfln = sfl_km1 - snmlt
+
+    t = t - snmlt / cons
 
     rfln = rfln + fwatr * dr
     sfln = sfln + (1.0 - fwatr) * dr
 
     # precipitation evaporation
-    prtot = rfln + sfln
-    if (
-        (prtot > constants.ZEPS2)
-        & (covpclr > constants.ZEPS2)
-        & (constants.LEVAPLS2 | constants.LDRAIN1D)
-    ):
-        preclr = prtot * covpclr / covptot_km1
 
-        # this is the humidity in the moisest zcovpclr region
-        qe = in_qsat - (in_qsat - qlim) * covpclr / ((1.0 - out_clc) ** 2.0)
-        beta = (
-            constants.RG
-            * constants.RPECONS
-            * (sqrt(in_ap / tmp_aph_s) / 0.00509 * preclr / covpclr) ** 0.5777
-        )
+    evapr, evaps, out_covptot = _preciptation_evaporation(
+        rfln,
+        sfln,
+        covpclr,
+        covptot_km1,
+        in_qsat,
+        qlim,
+        out_clc,
+        in_ap,
+        tmp_aph_s,
+        dt,
+        corqs,
+        in_aph_p1,
+        in_aph,
+    )
 
-        # implicit solution
-        b = dt * beta * (in_qsat - qe) / (1.0 + dt * beta * corqs)
-
-        dtgdp = dt * constants.RG / (in_aph_p1 - in_aph)
-        dpr = minimum(covpclr * b / dtgdp, preclr)
-        preclr = preclr - dpr
-        if preclr <= 0.0:
-            covptot_km1 = out_clc
-        out_covptot = covptot_km1
-
-        # warm proportion
-        evapr = dpr * rfln / prtot
-        rfln = rfln - evapr
-
-        # ice proportion
-        evaps = dpr * sfln / prtot
-        sfln = sfln - evaps
-    else:
-        evapr = 0.0
-        evaps = 0.0
-        out_covptot = 0.0
+    rfln = rfln - evapr
+    sfln = sfln - evaps
 
     # update of T and Q tendencies due to:
     # - condensation/evaporation of cloud water/ice
