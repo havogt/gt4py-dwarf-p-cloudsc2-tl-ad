@@ -104,19 +104,24 @@ def setup():
     print(diags_next["f_fplsl"])
     print(tendencies["f_t"])
 
-    np.testing.assert_allclose(mphys.g_trpaus, mphys_next.g_trpaus[:, :, -2])
     np.testing.assert_allclose(diags["f_clc"], diags_next["f_clc"])
-    np.testing.assert_allclose(mphys.g_aph_s, mphys_next.g_aph_s[:, :, -1])
     np.testing.assert_allclose(diags["f_covptot"], diags_next["f_covptot"])
-    np.testing.assert_allclose(diags["f_fplsl"][:,:,:-1], diags_next["f_fplsl"][:,:,:-1])
-    np.testing.assert_allclose(diags["f_fplsn"][:,:,:-1], diags_next["f_fplsn"][:,:,:-1])
-    np.testing.assert_allclose(diags["f_fhpsl"][:,:,:-1], diags_next["f_fhpsl"][:,:,:-1])
-    np.testing.assert_allclose(diags["f_fhpsn"][:,:,:-1], diags_next["f_fhpsn"][:,:,:-1])
+    np.testing.assert_allclose(
+        diags["f_fplsl"][:, :, :-1], diags_next["f_fplsl"][:, :, :-1]
+    )
+    np.testing.assert_allclose(
+        diags["f_fplsn"][:, :, :-1], diags_next["f_fplsn"][:, :, :-1]
+    )
+    np.testing.assert_allclose(
+        diags["f_fhpsl"][:, :, :-1], diags_next["f_fhpsl"][:, :, :-1]
+    )
+    np.testing.assert_allclose(
+        diags["f_fhpsn"][:, :, :-1], diags_next["f_fhpsn"][:, :, :-1]
+    )
     np.testing.assert_allclose(tendencies["f_q"], tendencies_next["f_q"])
     np.testing.assert_allclose(tendencies["f_qi"], tendencies_next["f_qi"])
     np.testing.assert_allclose(tendencies["f_ql"], tendencies_next["f_ql"])
     np.testing.assert_allclose(tendencies["f_t"], tendencies_next["f_t"])
-    # np.testing.assert_allclose(mphys.g_covptot, mphys_next.g_covptot)
 
 
 setup()

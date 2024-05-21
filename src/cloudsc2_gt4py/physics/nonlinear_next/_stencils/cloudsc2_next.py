@@ -591,7 +591,7 @@ def _cloudsc2_next(
     in_tnd_cml_qi: IJKField,
     in_tnd_cml_ql: IJKField,
     in_tnd_cml_t: IJKField,
-    tmp_aph_s: IJKField,
+    tmp_aph_s: IJField,
     dt: gtx.float64,
 ) -> tuple[
     IJKField,
@@ -604,10 +604,9 @@ def _cloudsc2_next(
     IJKField,
     IJKField,
     IJKField,
-    IJKField,
 ]:
     t = _compute_t(in_t, in_tnd_cml_t, dt)
-    tmp_trpaus = _compute_trpaus(t, in_eta)
+    trpaus = _compute_trpaus(t, in_eta)
 
     # ============ out_clc
     # first guess values for q, ql and qi
@@ -658,7 +657,7 @@ def _cloudsc2_next(
     # use clipped state
     qlim = minimum(q, in_qsat)
 
-    crh2 = _compute_crh2(tmp_trpaus, in_eta)
+    crh2 = _compute_crh2(trpaus, in_eta)
 
     # allow ice supersaturation at cold temperatures
     qsat = where(t < constants.RTICE, in_qsat * (1.8 - 0.003 * t), in_qsat)
@@ -741,7 +740,6 @@ def _cloudsc2_next(
     out_fhpsn = -out_fplsn * constants.RLSTT
 
     return (
-        tmp_trpaus,
         out_clc,
         out_covptot,
         out_fhpsl,
@@ -784,8 +782,7 @@ def cloudsc2_next(
     out_tnd_qi: IJKField,
     out_tnd_ql: IJKField,
     out_tnd_t: IJKField,
-    tmp_aph_s: IJKField,
-    tmp_trpaus: IJKField,
+    tmp_aph_s: IJField,
     dt: gtx.float,
 ):
     _cloudsc2_next(
@@ -809,7 +806,6 @@ def cloudsc2_next(
         tmp_aph_s,
         dt,
         out=(
-            tmp_trpaus[:, :, :-1],
             out_clc[:, :, :-1],
             out_covptot[:, :, :-1],
             out_fhpsl[:, :, :-1],
