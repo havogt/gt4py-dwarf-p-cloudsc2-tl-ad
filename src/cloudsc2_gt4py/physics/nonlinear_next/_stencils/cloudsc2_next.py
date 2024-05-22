@@ -199,18 +199,14 @@ def _compute_t(in_t: IJKField, in_tnd_cml_t: IJKField, dt: gtx.float64) -> IJKFi
     return in_t + dt * in_tnd_cml_t
 
 
-@gtx.scan_operator(axis=K, forward=True, init=0.1)
+@gtx.scan_operator(axis=K, forward=True, init=0.1, vectorized=True)
 def _compute_trpaus_forward(
     s: gtx.float64, t: gtx.float64, tp1: gtx.float64, in_eta: gtx.float64
 ) -> gtx.float64:
-    if in_eta > 0.1:
-        if in_eta < 0.4:
-            if t > tp1:
-                return in_eta
-    return s
+    return where((in_eta > 0.1) & (in_eta < 0.4) & (t > tp1), in_eta, s)
 
 
-@gtx.scan_operator(axis=K, forward=False, init=(True, 0.0))
+@gtx.scan_operator(axis=K, forward=False, init=(True, 0.0), vectorized=True)
 def _propagate(
     s: tuple[bool, gtx.float64], trpaus: gtx.float64
 ) -> tuple[bool, gtx.float64]:
@@ -336,16 +332,10 @@ def f_cuadjtqs_nl_0(
 
 @gtx.field_operator
 def f_cuadjtqs_nl(ap: gtx.float64, t: gtx.float64, q: gtx.float64):
-    if t > constants.RTT:
-        z3es = constants.R3LES
-        z4es = constants.R4LES
-        z5alcp = constants.R5ALVCP
-        zaldcp = constants.RALVDCP
-    else:
-        z3es = constants.R3IES
-        z4es = constants.R4IES
-        z5alcp = constants.R5ALSCP
-        zaldcp = constants.RALSDCP
+    z3es = where(t > constants.RTT, constants.R3LES, constants.R3IES)
+    z4es = where(t > constants.RTT, constants.R4LES, constants.R4IES)
+    z5alcp = where(t > constants.RTT, constants.R5ALVCP, constants.R5ALSCP)
+    zaldcp = where(t > constants.RTT, constants.RALVDCP, constants.RALSDCP)
 
     # if constants.ICALL == 0:
     t, q = f_cuadjtqs_nl_0(ap, t, q, z3es, z4es, z5alcp, zaldcp)
@@ -387,8 +377,7 @@ def _preciptation_evaporation(
     dtgdp = dt * constants.RG / (in_aph_p1 - in_aph)
     dpr = minimum(covpclr * b / dtgdp, preclr)
     preclr = preclr - dpr
-    if preclr <= 0.0:
-        covptot_km1 = out_clc
+    covptot_km1 = where(preclr <= 0.0, out_clc, covptot_km1)
     out_covptot = covptot_km1
     # warm proportion
     evapr = dpr * rfln / prtot
@@ -406,7 +395,12 @@ def _preciptation_evaporation(
     )
 
 
-@gtx.scan_operator(axis=K, forward=True, init=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
+@gtx.scan_operator(
+    axis=K,
+    forward=True,
+    init=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+    vectorized=True,
+)
 def main_scan(
     carry: tuple[
         gtx.float64,
@@ -515,12 +509,8 @@ def main_scan(
     # update rain fraction and freezing
     dq = maximum(qold - q, 0.0)
     dr2 = cons2 * dp * dq
-    if t < constants.RTT:
-        rfreeze2 = fwat * dr2
-        fwatr = 0.0
-    else:
-        rfreeze2 = 0.0
-        fwatr = 1.0
+    rfreeze2 = where(t < constants.RTT, fwat * dr2, 0.0)
+    fwatr = where(t < constants.RTT, 0.0, 1.0)
     rn = fwatr * dr2
     sn = (1.0 - fwatr) * dr2
     condl = condl + fwatr * dq / dt
