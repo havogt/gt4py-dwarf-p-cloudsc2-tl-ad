@@ -1,3 +1,7 @@
+import jax
+
+jax.config.update("jax_enable_x64", True)
+
 import gt4py.next as gtx
 from gt4py.next.common import Dims
 from gt4py.next import broadcast
@@ -199,19 +203,20 @@ def _compute_t(in_t: IJKField, in_tnd_cml_t: IJKField, dt: gtx.float64) -> IJKFi
     return in_t + dt * in_tnd_cml_t
 
 
-@gtx.scan_operator(axis=K, forward=True, init=0.1, vectorized=True)
+@gtx.scan_operator(axis=K, forward=True, init=0.1, strategy="jax")
 def _compute_trpaus_forward(
     s: gtx.float64, t: gtx.float64, tp1: gtx.float64, in_eta: gtx.float64
 ) -> gtx.float64:
     return where((in_eta > 0.1) & (in_eta < 0.4) & (t > tp1), in_eta, s)
 
 
-@gtx.scan_operator(axis=K, forward=False, init=(True, 0.0), vectorized=True)
+@gtx.scan_operator(axis=K, forward=False, init=(True, 0.0), strategy="jax")
 def _propagate(
     s: tuple[bool, gtx.float64], trpaus: gtx.float64
 ) -> tuple[bool, gtx.float64]:
     first, val = s
-    return (False, trpaus) if first else (False, val)
+    res = where(first, (False, trpaus), (False, val))
+    return res
 
 
 @gtx.field_operator
@@ -399,7 +404,7 @@ def _preciptation_evaporation(
     axis=K,
     forward=True,
     init=(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
-    vectorized=True,
+    strategy="jax",
 )
 def main_scan(
     carry: tuple[
