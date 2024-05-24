@@ -50,12 +50,17 @@ g_aph_s = None
 g_trpaus = None
 
 
-def as_field(*dims: gtx.Dimension):
+def as_field(*dims: gtx.Dimension, use_jax=False):
+    from jax import numpy as jnp
+
     def impl(arr: NDArrayLike) -> gtx.Field:
         domain = common.Domain(
             dims=dims, ranges=[common.unit_range(s) for s in arr.shape]
         )
-        return common._field(arr, domain=domain)
+        if use_jax:
+            return common._field(jnp.asarray(arr), domain=domain)
+        else:
+            return common._field(arr, domain=domain)
 
     return impl
 
@@ -104,7 +109,7 @@ class Cloudsc2NLnext(ImplicitTendencyComponent):
         # from gt4py.eve.utils import FrozenNamespace
 
         # cloudsc2_next.constants = FrozenNamespace(**externals)
-        self.cloudsc2 = cloudsc2_next.cloudsc2_next
+        self.cloudsc2 = cloudsc2_next._cloudsc2_next
 
     @cached_property
     def _input_properties(self) -> PropertyDict:
@@ -156,35 +161,72 @@ class Cloudsc2NLnext(ImplicitTendencyComponent):
         out_diagnostics: NDArrayLikeDict,
         overwrite_tendencies: dict[str, bool],
     ) -> None:
-        self.cloudsc2(
-            in_ap=as_field(I2, J2, K2)(state["f_ap"]),
-            in_aph=as_field(I2, J2, K2)(state["f_aph"]),
-            in_eta=as_field(K2)(state["f_eta"]),
-            in_lu=as_field(I2, J2, K2)(state["f_lu"]),
-            in_lude=as_field(I2, J2, K2)(state["f_lude"]),
-            in_mfd=as_field(I2, J2, K2)(state["f_mfd"]),
-            in_mfu=as_field(I2, J2, K2)(state["f_mfu"]),
-            in_q=as_field(I2, J2, K2)(state["f_q"]),
-            in_qi=as_field(I2, J2, K2)(state["f_qi"]),
-            in_ql=as_field(I2, J2, K2)(state["f_ql"]),
-            in_qsat=as_field(I2, J2, K2)(state["f_qsat"]),
-            in_supsat=as_field(I2, J2, K2)(state["f_supsat"]),
-            in_t=as_field(I2, J2, K2)(state["f_t"]),
-            in_tnd_cml_q=as_field(I2, J2, K2)(state["f_tnd_cml_q"]),
-            in_tnd_cml_qi=as_field(I2, J2, K2)(state["f_tnd_cml_qi"]),
-            in_tnd_cml_ql=as_field(I2, J2, K2)(state["f_tnd_cml_ql"]),
-            in_tnd_cml_t=as_field(I2, J2, K2)(state["f_tnd_cml_t"]),
-            out_clc=as_field(I2, J2, K2)(out_diagnostics["f_clc"]),
-            out_covptot=as_field(I2, J2, K2)(out_diagnostics["f_covptot"]),
-            out_fhpsl=as_field(I2, J2, K2)(out_diagnostics["f_fhpsl"]),
-            out_fhpsn=as_field(I2, J2, K2)(out_diagnostics["f_fhpsn"]),
-            out_fplsl=as_field(I2, J2, K2)(out_diagnostics["f_fplsl"]),
-            out_fplsn=as_field(I2, J2, K2)(out_diagnostics["f_fplsn"]),
-            out_tnd_q=as_field(I2, J2, K2)(out_tendencies["f_q"]),
-            out_tnd_qi=as_field(I2, J2, K2)(out_tendencies["f_qi"]),
-            out_tnd_ql=as_field(I2, J2, K2)(out_tendencies["f_ql"]),
-            out_tnd_t=as_field(I2, J2, K2)(out_tendencies["f_t"]),
-            tmp_aph_s=as_field(I2, J2)(state["f_aph"][..., -1]),
+        # self.cloudsc2(
+        #     in_ap=as_field(I2, J2, K2)(state["f_ap"]),
+        #     in_aph=as_field(I2, J2, K2)(state["f_aph"]),
+        #     in_eta=as_field(K2)(state["f_eta"]),
+        #     in_lu=as_field(I2, J2, K2)(state["f_lu"]),
+        #     in_lude=as_field(I2, J2, K2)(state["f_lude"]),
+        #     in_mfd=as_field(I2, J2, K2)(state["f_mfd"]),
+        #     in_mfu=as_field(I2, J2, K2)(state["f_mfu"]),
+        #     in_q=as_field(I2, J2, K2)(state["f_q"]),
+        #     in_qi=as_field(I2, J2, K2)(state["f_qi"]),
+        #     in_ql=as_field(I2, J2, K2)(state["f_ql"]),
+        #     in_qsat=as_field(I2, J2, K2)(state["f_qsat"]),
+        #     in_supsat=as_field(I2, J2, K2)(state["f_supsat"]),
+        #     in_t=as_field(I2, J2, K2)(state["f_t"]),
+        #     in_tnd_cml_q=as_field(I2, J2, K2)(state["f_tnd_cml_q"]),
+        #     in_tnd_cml_qi=as_field(I2, J2, K2)(state["f_tnd_cml_qi"]),
+        #     in_tnd_cml_ql=as_field(I2, J2, K2)(state["f_tnd_cml_ql"]),
+        #     in_tnd_cml_t=as_field(I2, J2, K2)(state["f_tnd_cml_t"]),
+        #     out_clc=as_field(I2, J2, K2)(out_diagnostics["f_clc"]),
+        #     out_covptot=as_field(I2, J2, K2)(out_diagnostics["f_covptot"]),
+        #     out_fhpsl=as_field(I2, J2, K2)(out_diagnostics["f_fhpsl"]),
+        #     out_fhpsn=as_field(I2, J2, K2)(out_diagnostics["f_fhpsn"]),
+        #     out_fplsl=as_field(I2, J2, K2)(out_diagnostics["f_fplsl"]),
+        #     out_fplsn=as_field(I2, J2, K2)(out_diagnostics["f_fplsn"]),
+        #     out_tnd_q=as_field(I2, J2, K2)(out_tendencies["f_q"]),
+        #     out_tnd_qi=as_field(I2, J2, K2)(out_tendencies["f_qi"]),
+        #     out_tnd_ql=as_field(I2, J2, K2)(out_tendencies["f_ql"]),
+        #     out_tnd_t=as_field(I2, J2, K2)(out_tendencies["f_t"]),
+        #     tmp_aph_s=as_field(I2, J2)(state["f_aph"][..., -1]),
+        #     dt=self.gt4py_config.dtypes.float(timestep.total_seconds()),
+        #     offset_provider={"K": K2},
+        # )
+        use_jax = True
+        shape = out_diagnostics["f_clc"].shape
+        (
+            as_field(I2, J2, K2)(out_diagnostics["f_clc"])[:, :, :-1],
+            as_field(I2, J2, K2)(out_diagnostics["f_covptot"])[:, :, :-1],
+            as_field(I2, J2, K2)(out_diagnostics["f_fhpsl"])[:, :, :-1],
+            as_field(I2, J2, K2)(out_diagnostics["f_fhpsn"])[:, :, :-1],
+            as_field(I2, J2, K2)(out_diagnostics["f_fplsl"])[:, :, :-1],
+            as_field(I2, J2, K2)(out_diagnostics["f_fplsn"])[:, :, :-1],
+            as_field(I2, J2, K2)(out_tendencies["f_q"])[:, :, :-1],
+            as_field(I2, J2, K2)(out_tendencies["f_qi"])[:, :, :-1],
+            as_field(I2, J2, K2)(out_tendencies["f_ql"])[:, :, :-1],
+            as_field(I2, J2, K2)(out_tendencies["f_t"])[:, :, :-1],
+        ) = self.cloudsc2(
+            in_ap=as_field(I2, J2, K2, use_jax=use_jax)(state["f_ap"]),
+            in_aph=as_field(I2, J2, K2, use_jax=use_jax)(state["f_aph"]),
+            in_eta=as_field(K2, use_jax=use_jax)(state["f_eta"]),
+            in_lu=as_field(I2, J2, K2, use_jax=use_jax)(state["f_lu"]),
+            in_lude=as_field(I2, J2, K2, use_jax=use_jax)(state["f_lude"]),
+            in_mfd=as_field(I2, J2, K2, use_jax=use_jax)(state["f_mfd"]),
+            in_mfu=as_field(I2, J2, K2, use_jax=use_jax)(state["f_mfu"]),
+            in_q=as_field(I2, J2, K2, use_jax=use_jax)(state["f_q"]),
+            in_qi=as_field(I2, J2, K2, use_jax=use_jax)(state["f_qi"]),
+            in_ql=as_field(I2, J2, K2, use_jax=use_jax)(state["f_ql"]),
+            in_qsat=as_field(I2, J2, K2, use_jax=use_jax)(state["f_qsat"]),
+            in_supsat=as_field(I2, J2, K2, use_jax=use_jax)(state["f_supsat"]),
+            in_t=as_field(I2, J2, K2, use_jax=use_jax)(state["f_t"]),
+            in_tnd_cml_q=as_field(I2, J2, K2, use_jax=use_jax)(state["f_tnd_cml_q"]),
+            in_tnd_cml_qi=as_field(I2, J2, K2, use_jax=use_jax)(state["f_tnd_cml_qi"]),
+            in_tnd_cml_ql=as_field(I2, J2, K2, use_jax=use_jax)(state["f_tnd_cml_ql"]),
+            in_tnd_cml_t=as_field(I2, J2, K2, use_jax=use_jax)(state["f_tnd_cml_t"]),
+            tmp_aph_s=as_field(I2, J2, use_jax=use_jax)(state["f_aph"][..., -1]),
             dt=self.gt4py_config.dtypes.float(timestep.total_seconds()),
             offset_provider={"K": K2},
+            domain=common.domain({I2: shape[0], J2: shape[1], K2: shape[2] - 1}),
+            use_jax=True,
         )
