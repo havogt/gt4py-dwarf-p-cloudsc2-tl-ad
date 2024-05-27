@@ -99,7 +99,6 @@ def setup():
     )
     tendencies_next, diags_next = cloudsc2_nl_next(state, dt)
 
-    print(mphys_next.g_trpaus)
     print(diags_next["f_clc"])
     print(diags["f_clc"])
     print(diags_next["f_fplsl"])
