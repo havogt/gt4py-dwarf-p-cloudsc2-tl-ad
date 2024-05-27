@@ -154,8 +154,12 @@ class HDF5Reader:
             "RCL_KKAau": self._get_parameter_f("YRECLDP_RCL_KKAau"),
             "RCL_KKBauq": self._get_parameter_f("YRECLDP_RCL_KKBauq"),
             "RCL_KKBaun": self._get_parameter_f("YRECLDP_RCL_KKBaun"),
-            "RCL_KK_cloud_num_sea": self._get_parameter_f("YRECLDP_RCL_KK_cloud_num_sea"),
-            "RCL_KK_cloud_num_land": self._get_parameter_f("YRECLDP_RCL_KK_cloud_num_land"),
+            "RCL_KK_cloud_num_sea": self._get_parameter_f(
+                "YRECLDP_RCL_KK_cloud_num_sea"
+            ),
+            "RCL_KK_cloud_num_land": self._get_parameter_f(
+                "YRECLDP_RCL_KK_cloud_num_land"
+            ),
             "RCL_AI": self._get_parameter_f("YRECLDP_RCL_AI"),
             "RCL_BI": self._get_parameter_f("YRECLDP_RCL_BI"),
             "RCL_CI": self._get_parameter_f("YRECLDP_RCL_CI"),
@@ -259,7 +263,9 @@ class HDF5Reader:
         return out
 
     def get_yrncl_parameters(self) -> dict[str, bool]:
-        return {"LREGCL": True}
+        return {
+            "LREGCL": False
+        }  # TODO: disabled because can't be obtained via autodiff
 
     def get_yrphnc_parameters(self) -> dict[str, bool]:
         return {"LEVAPLS2": False}

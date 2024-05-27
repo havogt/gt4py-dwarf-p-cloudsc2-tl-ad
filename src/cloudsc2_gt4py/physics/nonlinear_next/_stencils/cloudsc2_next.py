@@ -8,6 +8,7 @@ from gt4py.next import broadcast
 from gt4py.eve.utils import FrozenNamespace
 from gt4py.next.ffront.fbuiltins import exp, sqrt, tanh, minimum, maximum, where
 
+
 constants = FrozenNamespace(
     **{
         "R2ES": 380.1608703442847,
@@ -177,9 +178,11 @@ constants = FrozenNamespace(
         "RLPDRAG": 0.0,
         "RLPEVAP": 0.0,
         "RLPP00": 30000.0,
+        "LREGCL": False,
         "LEVAPLS2": False,
         "ICALL": 0,
         "LDRAIN1D": False,
+        "NLEV": 137,
         "ZEPS1": 1e-12,
         "ZEPS2": 1e-10,
         "ZQMAX": 0.5,
