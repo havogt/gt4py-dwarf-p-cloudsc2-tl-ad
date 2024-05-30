@@ -18,6 +18,7 @@ from __future__ import annotations
 from functools import cached_property
 from itertools import repeat
 from typing import TYPE_CHECKING
+import numpy as np
 
 from ifs_physics_common.framework.components import ImplicitTendencyComponent
 from ifs_physics_common.framework.grid import I, J, K
@@ -31,7 +32,17 @@ if TYPE_CHECKING:
 
     from ifs_physics_common.framework.config import GT4PyConfig
     from ifs_physics_common.framework.grid import ComputationalGrid
-    from ifs_physics_common.utils.typingx import NDArrayLikeDict, ParameterDict, PropertyDict
+    from ifs_physics_common.utils.typingx import (
+        NDArrayLikeDict,
+        ParameterDict,
+        PropertyDict,
+    )
+
+g_aph_s = None
+g_rfl = None
+g_sfl = None
+g_covptot = None
+g_trpaus = None
 
 
 class Cloudsc2NL(ImplicitTendencyComponent):
@@ -52,7 +63,9 @@ class Cloudsc2NL(ImplicitTendencyComponent):
         enable_checks: bool = True,
         gt4py_config: GT4PyConfig,
     ) -> None:
-        super().__init__(computational_grid, enable_checks=enable_checks, gt4py_config=gt4py_config)
+        super().__init__(
+            computational_grid, enable_checks=enable_checks, gt4py_config=gt4py_config
+        )
 
         externals: Dict[str, Union[bool, float, int]] = {}
         externals.update(yoethf_parameters or {})
@@ -125,7 +138,9 @@ class Cloudsc2NL(ImplicitTendencyComponent):
         overwrite_tendencies: dict[str, bool],
     ) -> None:
         with managed_temporary_storage(
-            self.computational_grid, *repeat(((I, J), "float"), 5), gt4py_config=self.gt4py_config
+            self.computational_grid,
+            *repeat(((I, J), "float"), 5),
+            gt4py_config=self.gt4py_config,
         ) as (aph_s, rfl, sfl, covptot, trpaus):
             aph_s[...] = state["f_aph"][..., -1]
             self.cloudsc2(
@@ -167,3 +182,9 @@ class Cloudsc2NL(ImplicitTendencyComponent):
                 validate_args=self.gt4py_config.validate_args,
                 exec_info=self.gt4py_config.exec_info,
             )
+            global g_aph_s, g_covptot, g_rfl, g_sfl, g_trpaus
+            g_aph_s = np.copy(aph_s)
+            g_covptot = np.copy(covptot)
+            g_rfl = np.copy(rfl)
+            g_sfl = np.copy(sfl)
+            g_trpaus = np.copy(trpaus)
